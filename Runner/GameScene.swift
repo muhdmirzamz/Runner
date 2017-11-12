@@ -19,7 +19,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 	var score = 0
 	var scoreLabel: SKLabelNode? = nil
 	
-	// a way to access the block to test if block has passed player
+	// a way to keep track of spawned blocks
+	// spawned blocks are declared locally in a method
+	// inefficient to declare them globally in case we need more blocks to increase difficulty
 	var shapeArr = [SKShapeNode]()
 	
 	var topCollisionBlock: SKShapeNode?
@@ -70,6 +72,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 		self.player.physicsBody?.categoryBitMask = Collision().Player
 		self.player.physicsBody?.contactTestBitMask = Collision().Block
 		self.player.physicsBody?.collisionBitMask = Collision().Border
+		self.player.physicsBody?.isDynamic = false
 		
 		let actionBlock = SKAction.run { 
 			self.spawnBlock()
@@ -83,9 +86,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 		
 		// same size as blocks
 		self.topCollisionBlock = SKShapeNode.init(rectOf: CGSize.init(width: 50, height: 50))
-		self.topCollisionBlock?.isHidden = true
-		self.topCollisionBlock?.fillColor = UIColor.red
+		self.topCollisionBlock?.isHidden = false
+		self.topCollisionBlock?.fillColor = UIColor.blue
 		// point of origin is center
+		// collision block is 50, 50 so 50 / 2 is 25
 		self.topCollisionBlock?.position = CGPoint.init(x: 25, y: self.size.height - 25)
 		self.topCollisionBlock?.zPosition = 3
 		self.addChild(self.topCollisionBlock!)
@@ -95,16 +99,17 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 		self.topCollisionBlock?.physicsBody?.collisionBitMask = 0
 		self.topCollisionBlock?.physicsBody?.contactTestBitMask = Collision().Block
 		
-//		self.bottomCollisionBlock = SKShapeNode.init(rectOf: CGSize.init(width: 50, height: 50))
-//		self.bottomCollisionBlock?.isHidden = true
-//		self.bottomCollisionBlock?.fillColor = UIColor.red
-//		self.bottomCollisionBlock?.position = CGPoint.init(x: self.player.position.x - 20, y: 25)
-//		self.bottomCollisionBlock?.zPosition = 3
-//		self.addChild(self.bottomCollisionBlock!)
+		self.bottomCollisionBlock = SKShapeNode.init(rectOf: CGSize.init(width: 50, height: 50))
+		self.bottomCollisionBlock?.isHidden = false
+		self.bottomCollisionBlock?.fillColor = UIColor.red
+		self.bottomCollisionBlock?.position = CGPoint.init(x: 25, y: 25)
+		self.bottomCollisionBlock?.zPosition = 3
+		self.addChild(self.bottomCollisionBlock!)
 		
-//		self.bottomCollisionBlock?.physicsBody = SKPhysicsBody.init(rectangleOf: (self.bottomCollisionBlock?.frame.size)!)
-//		self.bottomCollisionBlock?.physicsBody?.categoryBitMask = Collision().BottomBlock
-//		self.bottomCollisionBlock?.physicsBody?.contactTestBitMask = Collision().Block
+		self.bottomCollisionBlock?.physicsBody = SKPhysicsBody.init(rectangleOf: (self.bottomCollisionBlock?.frame.size)!)
+		self.bottomCollisionBlock?.physicsBody?.categoryBitMask = Collision().BottomBlock
+		self.bottomCollisionBlock?.physicsBody?.collisionBitMask = 0
+		self.bottomCollisionBlock?.physicsBody?.contactTestBitMask = Collision().Block
     }
 	
 	func spawnBlock() {
@@ -120,7 +125,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 		} else if n == 1 {
 			spawnHeight = self.size.height - (100 / 2)
 		}
-		
 		
 		block.position = CGPoint.init(x: self.size.width, y: spawnHeight)
 		block.fillColor = UIColor.green
@@ -156,7 +160,14 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 			self.shapeArr.remove(at: self.shapeArr.startIndex)
 		}
 		
+		// top block and block
 		if (contact.bodyA.categoryBitMask == Collision().TopBlock && contact.bodyB.categoryBitMask == Collision().Block) || (contact.bodyA.categoryBitMask == Collision().Block && contact.bodyB.categoryBitMask == Collision().TopBlock) {
+			self.score += 1
+			self.scoreLabel?.text = "Score: \(score)"
+		}
+		
+		// bottom block and block
+		if (contact.bodyA.categoryBitMask == Collision().BottomBlock && contact.bodyB.categoryBitMask == Collision().Block) || (contact.bodyA.categoryBitMask == Collision().Block && contact.bodyB.categoryBitMask == Collision().BottomBlock) {
 			self.score += 1
 			self.scoreLabel?.text = "Score: \(score)"
 		}
