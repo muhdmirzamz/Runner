@@ -8,6 +8,7 @@
 
 import SpriteKit
 import GameplayKit
+import CoreData
 
 class GameScene: SKScene, SKPhysicsContactDelegate {
 
@@ -33,11 +34,13 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 	// comparing with 0's will give a zero value
 	// only non-zero values cause collision
 	struct Collision {
-		let Border: UInt32 = 1
-		let Player: UInt32 = 2
-		let Block: UInt32 = 3
-		let TopBlock: UInt32 = 4
-		let BottomBlock: UInt32 = 5
+		let None: UInt32 = 0
+		let All: UInt32 = UInt32.max
+		let Border: UInt32 = 0b1 // 1
+		let Player: UInt32 = 0b10 // 2
+		let Block: UInt32 = 0b11 // 3
+		let TopBlock: UInt32 = 0b100 // 4
+		let BottomBlock: UInt32 = 0b1000 // 8
 	}
 	
     override func didMove(to view: SKView) {
@@ -62,7 +65,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 		self.backgroundImage2.position = CGPoint.init(x: (self.size.width / 2) + self.size.width , y: self.size.height / 2)
 		self.addChild(self.backgroundImage2)
 	
-		self.player.position = CGPoint.init(x: 50, y: 50)
+		self.player.position = CGPoint.init(x: 80, y: 50)
 		self.player.size = CGSize.init(width: 100, height: 100)
 		self.player.zPosition = 3
 		
@@ -72,7 +75,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 		self.player.physicsBody?.categoryBitMask = Collision().Player
 		self.player.physicsBody?.contactTestBitMask = Collision().Block
 		self.player.physicsBody?.collisionBitMask = Collision().Border
-		self.player.physicsBody?.isDynamic = false
 		
 		let actionBlock = SKAction.run { 
 			self.spawnBlock()
@@ -86,8 +88,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 		
 		// same size as blocks
 		self.topCollisionBlock = SKShapeNode.init(rectOf: CGSize.init(width: 50, height: 50))
-		self.topCollisionBlock?.isHidden = false
-		self.topCollisionBlock?.fillColor = UIColor.blue
+		self.topCollisionBlock?.isHidden = true
 		// point of origin is center
 		// collision block is 50, 50 so 50 / 2 is 25
 		self.topCollisionBlock?.position = CGPoint.init(x: 25, y: self.size.height - 25)
@@ -100,12 +101,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 		self.topCollisionBlock?.physicsBody?.contactTestBitMask = Collision().Block
 		
 		self.bottomCollisionBlock = SKShapeNode.init(rectOf: CGSize.init(width: 50, height: 50))
-		self.bottomCollisionBlock?.isHidden = false
-		self.bottomCollisionBlock?.fillColor = UIColor.red
+		self.bottomCollisionBlock?.isHidden = true
 		self.bottomCollisionBlock?.position = CGPoint.init(x: 25, y: 25)
 		self.bottomCollisionBlock?.zPosition = 3
 		self.addChild(self.bottomCollisionBlock!)
-		
+
 		self.bottomCollisionBlock?.physicsBody = SKPhysicsBody.init(rectangleOf: (self.bottomCollisionBlock?.frame.size)!)
 		self.bottomCollisionBlock?.physicsBody?.categoryBitMask = Collision().BottomBlock
 		self.bottomCollisionBlock?.physicsBody?.collisionBitMask = 0
@@ -113,7 +113,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
 	
 	func spawnBlock() {
-		let block = SKShapeNode.init(rectOf: CGSize.init(width: 100, height: 100))
+		let block = SKShapeNode.init(rectOf: CGSize.init(width: 100, height: 150))
 		
 		let n = arc4random_uniform(UInt32(2))
 		print("Rand number: \(n)")
@@ -121,9 +121,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 		var spawnHeight: CGFloat = 0
 		
 		if n == 0 {
-			spawnHeight = 100 / 2
+			spawnHeight = 150 / 2
 		} else if n == 1 {
-			spawnHeight = self.size.height - (100 / 2)
+			spawnHeight = self.size.height - (150 / 2)
 		}
 		
 		block.position = CGPoint.init(x: self.size.width, y: spawnHeight)
@@ -135,8 +135,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 		
 		block.physicsBody = SKPhysicsBody.init(rectangleOf: block.frame.size)
 		block.physicsBody?.categoryBitMask = Collision().Block
+		block.physicsBody?.collisionBitMask = 0
 		block.physicsBody?.contactTestBitMask = Collision().Player | Collision().TopBlock | Collision().BottomBlock
-		block.physicsBody?.isDynamic = false
 		
 		let action = SKAction.move(to: CGPoint.init(x: -100, y: block.position.y), duration: 3)
 		let remove = SKAction.removeFromParent()
@@ -158,6 +158,60 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 			contact.bodyB.node?.run(remove)
 			
 			self.shapeArr.remove(at: self.shapeArr.startIndex)
+			
+			let context = (UIApplication.shared.delegate as! AppDelegate).persistentContainer.viewContext
+			let fetchReq = NSFetchRequest<Record>.init(entityName: "Record")
+			do {
+				let items = try context.fetch(fetchReq)
+				
+				print("Number of entries: \(items.count)")
+				
+				if let score = items.first?.score {
+					// if it is a new high score
+					let score = Int.init(NSNumber.init(value: score))
+
+					print("Current score: \(self.score)")
+					print("Score: \(score)")
+
+					if self.score > score {
+						// delete current score
+						context.delete(items.first!)
+
+						do {
+							try context.save()
+						} catch {
+							print("Deleting failed!")
+						}
+
+						// add new high score
+						let highestScore = NSEntityDescription.insertNewObject(forEntityName: "Record", into: context)
+						highestScore.setValue(self.score, forKey: "score")
+
+						do {
+							try context.save()
+						} catch {
+							print("Save failed!")
+						}
+					}
+				} else {
+					let highestScore = NSEntityDescription.insertNewObject(forEntityName: "Record", into: context)
+					highestScore.setValue(self.score, forKey: "score")
+					
+					do {
+						try context.save()
+					} catch {
+						print("Save failed!")
+					}
+				}
+			} catch {
+				print("Fetch fail!")
+			}
+			
+			
+			
+			let transition = SKTransition.flipHorizontal(withDuration: 2)
+			let gameOverScene = GameOverScene.init(size: self.size)
+			self.view?.presentScene(gameOverScene, transition: transition)
 		}
 		
 		// top block and block
@@ -177,6 +231,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 		let touchLocation = touches.first?.location(in: self)
 
 		let moveAction = SKAction.moveTo(y: (touchLocation?.y)!, duration: 1)
+//		let moveAction = SKAction.move(to: CGPoint.init(x: (touchLocation?.x)!, y: (touchLocation?.y)!), duration: 1)
 		
 		self.player.run(moveAction)
 	}
